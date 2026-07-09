@@ -95,3 +95,7 @@ Built by [@blakexu](https://github.com/HeiGeAi), distilled from the release mist
 MIT。随便用，随便改，随便分享。
 
 MIT License. Use it, fork it, share it.
+
+## 更多开源工具
+
+本项目属于黑哥 AI 的开源武器库。全部开源项目的清单、用途和协议,见 [heigeai.com/opensource](https://www.heigeai.com/opensource/)。
