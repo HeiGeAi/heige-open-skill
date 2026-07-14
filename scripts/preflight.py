@@ -118,7 +118,9 @@ def check_skill_frontmatter(root):
     if bad:
         errors.append(f"SKILL.md frontmatter 顶层键越界: {bad} "
                       f"(只允许 {sorted(ALLOWED_FRONTMATTER_KEYS)}, 其余放 metadata: 下)")
-    if name_val and name_val != root.resolve().name:
+    if not name_val:
+        errors.append("SKILL.md frontmatter 缺 name")
+    elif name_val != root.resolve().name:
         errors.append(f"skill 三一致破坏: frontmatter name={name_val} 目录名={root.resolve().name}")
 
 
@@ -140,7 +142,8 @@ def scan_doc_files(root):
 
 def domain_allowed(domain):
     d = domain.lower()
-    return any(d == s or d.endswith(s) for s in DOMAIN_ALLOWLIST_SUFFIXES)
+    return any(d == s or d.endswith("." + s.lstrip("."))
+               for s in DOMAIN_ALLOWLIST_SUFFIXES)
 
 
 def check_entities(root):
