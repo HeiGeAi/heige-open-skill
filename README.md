@@ -1,6 +1,6 @@
 # heige-open-skill
 
-![Skill](https://img.shields.io/badge/skill-1.0.0-7c3aed.svg)
+![Skill](https://img.shields.io/badge/skill-1.0.1-7c3aed.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Agents](https://img.shields.io/badge/agents-Claude%20Code%20·%20Codex%20·%20Cursor-orange.svg)
 ![Python](https://img.shields.io/badge/python-stdlib%20only-yellow.svg)
