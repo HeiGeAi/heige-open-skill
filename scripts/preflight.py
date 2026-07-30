@@ -2,12 +2,13 @@
 """HeiGeAi 开源发布前硬检查。
 
 用法:
-    python3 preflight.py <repo-path> [--check-links]
+    python3 preflight.py <repo-path> [--check-links] [--git-range <base>..<head>]
 
 检查项:
     1. 必备文件: README.md / LICENSE / .gitignore
     2. LICENSE 类型识别; PolyForm 必须带 Required Notice
-    3. git 历史: 邮箱只允许 noreply, commit 信息禁 Co-Authored-By
+    3. git 历史: 邮箱只允许 noreply, commit 信息禁 Co-Authored-By;
+       默认检查全历史, --git-range 只检查指定提交范围
     4. SKILL.md frontmatter: 顶层键白名单, name 与目录名一致
     5. 外部实体扫描: 域名 / 邮箱 / GitHub 句柄清单, 供人工核查
     6. --check-links: README 外链存活检查
@@ -15,6 +16,7 @@
 退出码: 有 ERROR 时为 1, 否则 0。WARN 逐条人工判断。
 """
 
+import argparse
 import re
 import subprocess
 import sys
@@ -69,26 +71,50 @@ def check_license(root):
         warns.append("LICENSE 类型识别不出来, 人工确认协议选型")
 
 
-def check_git_history(root):
+def check_git_history(root, git_range=None):
     if not (root / ".git").exists():
         infos.append("还没 git init, 跳过历史检查(建仓后记得复跑)")
         return
+    revision_args = []
+    scope = "提交历史"
+    if git_range:
+        parts = git_range.split("..")
+        if len(parts) != 2 or not all(parts) \
+                or any(part.startswith(("-", ".")) or re.search(r"\s", part) for part in parts):
+            errors.append(f"git 提交范围格式无效: {git_range} (必须是 <base>..<head>)")
+            return
+        revision_args = [git_range]
+        scope = f"提交范围 {git_range}"
     try:
-        out = subprocess.run(["git", "-C", str(root), "log", "--format=%an|%ae"],
-                             capture_output=True, text=True, check=True).stdout
-    except subprocess.CalledProcessError:
+        out = subprocess.run(
+            ["git", "-C", str(root), "log", "--format=%an|%ae", *revision_args],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        bodies = subprocess.run(
+            ["git", "-C", str(root), "log", "--format=%B", *revision_args],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except subprocess.CalledProcessError as exc:
+        if git_range:
+            detail = (exc.stderr or exc.stdout or "git log 失败").strip()
+            errors.append(f"git 提交范围无法检查: {git_range} ({detail})")
+            return
         infos.append("git 历史为空, 跳过历史检查")
         return
     idents = sorted(set(line for line in out.splitlines() if line.strip()))
     for ident in idents:
         name, _, email = ident.partition("|")
         if not email.endswith(ALLOWED_EMAIL_SUFFIX):
-            errors.append(f"提交历史有非 noreply 邮箱: {name} <{email}> "
+            errors.append(f"{scope}有非 noreply 邮箱: {name} <{email}> "
                           "(私人邮箱进公开历史要 force push 重写才能洗掉, 推送前必须清)")
-    bodies = subprocess.run(["git", "-C", str(root), "log", "--format=%B"],
-                            capture_output=True, text=True).stdout
     if re.search(r"co-authored-by", bodies, re.I):
-        errors.append("commit 信息里有 Co-Authored-By 标记, 公开仓库不允许")
+        errors.append(f"{scope}的 commit 信息里有 Co-Authored-By 标记, 公开仓库不允许")
+    if git_range:
+        infos.append(f"已检查 git 提交范围: {git_range}")
 
 
 def parse_frontmatter_keys(text):
@@ -195,21 +221,22 @@ def check_links(root):
 
 
 def main():
-    args = sys.argv[1:]
-    if not args:
-        print(__doc__)
-        sys.exit(2)
-    root = Path(args[0]).expanduser()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("repo_path")
+    parser.add_argument("--check-links", action="store_true")
+    parser.add_argument("--git-range", metavar="BASE..HEAD")
+    args = parser.parse_args()
+    root = Path(args.repo_path).expanduser()
     if not root.is_dir():
         print(f"目录不存在: {root}")
         sys.exit(2)
 
     check_required_files(root)
     check_license(root)
-    check_git_history(root)
+    check_git_history(root, args.git_range)
     check_skill_frontmatter(root)
     check_entities(root)
-    if "--check-links" in args:
+    if args.check_links:
         check_links(root)
 
     print(f"\n=== preflight: {root.resolve().name} ===")
