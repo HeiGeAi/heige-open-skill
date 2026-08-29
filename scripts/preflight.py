@@ -86,6 +86,29 @@ def check_git_history(root, git_range=None):
         revision_args = [git_range]
         scope = f"提交范围 {git_range}"
     try:
+        repository_probe = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if repository_probe.stdout.strip() != "true":
+            errors.append("git 仓库状态无效: 当前目录不在工作树中")
+            return
+        head_probe = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--verify", "HEAD^{commit}"],
+            capture_output=True,
+            text=True,
+        )
+        if head_probe.returncode != 0:
+            subprocess.run(
+                ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            infos.append("git 历史为空, 跳过历史检查")
+            return
         out = subprocess.run(
             ["git", "-C", str(root), "log", "--format=%an|%ae", *revision_args],
             capture_output=True,
@@ -98,12 +121,13 @@ def check_git_history(root, git_range=None):
             text=True,
             check=True,
         ).stdout
-    except subprocess.CalledProcessError as exc:
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = getattr(exc, "stderr", None) or getattr(exc, "stdout", None) or str(exc)
+        detail = " ".join(str(detail).replace(str(root), "<repo>").split())[:300]
         if git_range:
-            detail = (exc.stderr or exc.stdout or "git log 失败").strip()
             errors.append(f"git 提交范围无法检查: {git_range} ({detail})")
             return
-        infos.append("git 历史为空, 跳过历史检查")
+        errors.append(f"git 历史无法读取: {detail or 'git 命令失败'}")
         return
     idents = sorted(set(line for line in out.splitlines() if line.strip()))
     for ident in idents:

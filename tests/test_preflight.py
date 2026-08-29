@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -58,6 +59,11 @@ class PreflightTests(unittest.TestCase):
         return self._git(root, "rev-parse", "HEAD").stdout.strip()
 
     def _create_repo(self, root, first_email, first_body=None):
+        self._write_required_files(root)
+        self._git(root, "init", "-b", "main")
+        return self._commit(root, first_email, "initial", first_body)
+
+    def _write_required_files(self, root):
         (root / "README.md").write_text("# Test\n", encoding="utf-8")
         (root / "LICENSE").write_text(
             "MIT License\n\nCopyright 2026 HeiGeAi\n",
@@ -68,8 +74,6 @@ class PreflightTests(unittest.TestCase):
             f"---\nname: {root.name}\ndescription: test\n---\n\n# Test\n",
             encoding="utf-8",
         )
-        self._git(root, "init", "-b", "main")
-        return self._commit(root, first_email, "initial", first_body)
 
     def _run_preflight(self, root, *args):
         return subprocess.run(
@@ -150,6 +154,68 @@ class PreflightTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("legacy@example.com", result.stdout)
+
+    def test_valid_unborn_repository_is_allowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_required_files(root)
+            self._git(root, "init", "-b", "main")
+
+            result = self._run_preflight(root)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("git 历史为空", result.stdout)
+
+    def test_broken_git_metadata_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_required_files(root)
+            (root / ".git").mkdir()
+            (root / ".git" / "HEAD").write_text("not a valid head\n", encoding="utf-8")
+
+            result = self._run_preflight(root)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("git", result.stdout.lower())
+        self.assertNotIn("历史为空", result.stdout)
+
+    def test_missing_git_object_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            commit = self._create_repo(
+                root, "12345+test@users.noreply.github.com"
+            )
+            object_path = root / ".git" / "objects" / commit[:2] / commit[2:]
+            object_path.unlink()
+
+            result = self._run_preflight(root)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("git", result.stdout.lower())
+        self.assertNotIn("历史为空", result.stdout)
+
+    def test_git_permission_failure_is_reported_without_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            self._write_required_files(root)
+            (root / ".git").mkdir()
+            fake_bin = Path(tmp) / "bin"
+            fake_bin.mkdir()
+            fake_git = fake_bin / "git"
+            fake_git.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            fake_git.chmod(0o600)
+
+            result = subprocess.run(
+                [sys.executable, str(MODULE_PATH), str(root)],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "PATH": str(fake_bin)},
+            )
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("git", result.stdout.lower())
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_ci_uses_auditable_ranges_and_keeps_full_history_dispatch(self):
         workflow = (MODULE_PATH.parents[1] / ".github" / "workflows" / "ci.yml").read_text(
