@@ -207,10 +207,16 @@ def check_entities(root):
     for email, loc in sorted(emails.items()):
         warns.append(f"示例邮箱用了真实域: {email} ({loc}), 换成 user@example.com 这类保留域")
     if domains:
-        listing = ", ".join(f"{d}({loc})" for d, loc in sorted(domains.items())[:20])
+        items = sorted(domains.items())
+        listing = ", ".join(f"{d}({loc})" for d, loc in items[:20])
+        if len(items) > 20:
+            listing += f", ... 另省略 {len(items) - 20} 条, 请在仓库内 grep 全量核查"
         infos.append(f"需人工核查的域名清单(RDAP 逐一查注册): {listing}")
     if handles:
-        listing = ", ".join(f"{h}({loc})" for h, loc in sorted(handles.items())[:20])
+        items = sorted(handles.items())
+        listing = ", ".join(f"{h}({loc})" for h, loc in items[:20])
+        if len(items) > 20:
+            listing += f", ... 另省略 {len(items) - 20} 条, 请在仓库内 grep 全量核查"
         infos.append(f"需人工核查的 GitHub 句柄(gh api users/<句柄> 查存在): {listing}")
 
 
