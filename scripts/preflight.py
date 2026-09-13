@@ -5,7 +5,7 @@
     python3 preflight.py <repo-path> [--check-links] [--git-range <base>..<head>]
 
 检查项:
-    1. 必备文件: README.md / LICENSE / .gitignore
+    1. 必备文件: README.md / LICENSE (缺 .gitignore 只给 WARN)
     2. LICENSE 类型识别; PolyForm 必须带 Required Notice
     3. git 历史: 邮箱只允许 noreply, commit 信息禁 Co-Authored-By;
        默认检查全历史, --git-range 只检查指定提交范围
