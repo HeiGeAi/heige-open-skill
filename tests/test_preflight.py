@@ -25,6 +25,18 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(preflight.domain_allowed("docs.github.com"))
         self.assertFalse(preflight.domain_allowed("evilgithub.com"))
 
+    def test_skill_frontmatter_tolerates_utf8_bom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "SKILL.md").write_text(
+                f"\ufeff---\nname: {root.name}\ndescription: test\n---\n\n# Test\n",
+                encoding="utf-8",
+            )
+
+            preflight.check_skill_frontmatter(root)
+
+        self.assertEqual(preflight.errors, [])
+
     def test_skill_frontmatter_requires_name(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

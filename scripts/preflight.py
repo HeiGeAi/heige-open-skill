@@ -126,6 +126,7 @@ def check_git_history(root, git_range=None):
 
 
 def parse_frontmatter_keys(text):
+    text = text.lstrip("\ufeff")  # 容忍 UTF-8 BOM
     m = re.match(r"^---\n(.*?)\n---", text, re.S)
     if not m:
         return None, None
