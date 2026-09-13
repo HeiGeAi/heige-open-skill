@@ -98,6 +98,9 @@ def check_git_history(root, git_range=None):
             text=True,
             check=True,
         ).stdout
+    except FileNotFoundError:
+        warns.append("环境里没有 git 命令, 跳过历史检查, 装好 git 后必须复跑")
+        return
     except subprocess.CalledProcessError as exc:
         if git_range:
             detail = (exc.stderr or exc.stdout or "git log 失败").strip()
