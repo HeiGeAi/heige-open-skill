@@ -103,7 +103,13 @@ def check_git_history(root, git_range=None):
             detail = (exc.stderr or exc.stdout or "git log 失败").strip()
             errors.append(f"git 提交范围无法检查: {git_range} ({detail})")
             return
-        infos.append("git 历史为空, 跳过历史检查")
+        detail = (exc.stderr or "").strip()
+        if "does not have any commits yet" in detail:
+            infos.append("git 历史为空, 跳过历史检查")
+            return
+        # 其余 git 失败一律 fail-closed: 身份闸门未执行不能当成通过
+        errors.append(f"git 历史检查失败({detail or 'git log 异常'}), "
+                      "提交身份未核查, 修好 git 环境后复跑")
         return
     idents = sorted(set(line for line in out.splitlines() if line.strip()))
     for ident in idents:

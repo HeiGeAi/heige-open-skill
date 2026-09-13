@@ -172,6 +172,37 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("leaky@gmail.com", result.stdout)
 
+    def test_empty_repo_still_skips_history_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "README.md").write_text("# Test\n", encoding="utf-8")
+            (root / "LICENSE").write_text(
+                "MIT License\n\nCopyright 2026 HeiGeAi\n", encoding="utf-8"
+            )
+            (root / ".gitignore").write_text("*.pyc\n", encoding="utf-8")
+            (root / "SKILL.md").write_text(
+                f"---\nname: {root.name}\ndescription: test\n---\n\n# Test\n",
+                encoding="utf-8",
+            )
+            self._git(root, "init", "-b", "main")
+
+            result = self._run_preflight(root)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("git 历史为空", result.stdout)
+
+    def test_broken_git_repo_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._create_repo(root, "12345+test@users.noreply.github.com")
+            # 模拟 .git 损坏: HEAD 内容非法, git log 直接报错
+            (root / ".git" / "HEAD").write_text("garbage-not-a-ref\n", encoding="utf-8")
+
+            result = self._run_preflight(root)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("git 历史检查失败", result.stdout)
+
     def test_default_preflight_keeps_full_history_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
