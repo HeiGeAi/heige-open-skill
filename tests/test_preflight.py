@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -140,6 +141,36 @@ class PreflightTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("格式无效", result.stdout)
+
+    def test_committer_private_email_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._create_repo(root, "12345+test@users.noreply.github.com")
+            (root / "README.md").write_text("# Test\n\nLeaky.\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            env = dict(
+                os.environ,
+                GIT_COMMITTER_NAME="Leaky Committer",
+                GIT_COMMITTER_EMAIL="leaky@gmail.com",
+            )
+            subprocess.run(
+                [
+                    "git", "-C", str(root),
+                    "-c", "user.name=Test Author",
+                    "-c", "user.email=12345+test@users.noreply.github.com",
+                    "-c", "commit.gpgsign=false",
+                    "commit", "-m", "committer leak",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                env=env,
+            )
+
+            result = self._run_preflight(root)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("leaky@gmail.com", result.stdout)
 
     def test_default_preflight_keeps_full_history_gate(self):
         with tempfile.TemporaryDirectory() as tmp:

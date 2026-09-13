@@ -46,4 +46,4 @@ frontmatter 顶层只允许 `name` / `description` / `allowed-tools` / `compatib
 
 - **黄金路径**：陌生人视角，从 README 第一行开始，clone、安装、跑通第一个结果，每条命令真实执行一遍
 - **外链存活**：README 里每个外链 curl 一遍（preflight `--check-links` 可代跑）；注意 raw.githack 屏蔽 HEAD 请求会误报 403，改用 GET 复核
-- **提交身份**：`git log --format='%an %ae' | sort -u`，只允许 `HeiGeAi` + noreply 地址；`git log --format='%B' | grep -i co-authored` 必须为空
+- **提交身份**：`git log --format='%an %ae %cn %ce' | sort -u`，author 与 committer 都只允许 `HeiGeAi` + noreply 地址；`git log --format='%B' | grep -i co-authored` 必须为空

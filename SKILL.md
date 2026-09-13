@@ -75,7 +75,7 @@ gh repo create HeiGeAi/<仓库名> --public --source . --push
 
 1. CI 状态绿（有 CI 的话）：`gh run list -R HeiGeAi/<名> -L 1`
 2. README 线上渲染正常：徽章出图、锚点跳转、图片路径对
-3. 提交身份复查：`git log --format='%an %ae' | sort -u`，只允许 noreply 地址
+3. 提交身份复查：`git log --format='%an %ae %cn %ce' | sort -u`，author 与 committer 都只允许 noreply 地址
 4. 陌生人视角：README 从零跑通安装使用（黄金路径）
 
 ## 输出汇报格式

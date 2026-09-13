@@ -87,7 +87,7 @@ def check_git_history(root, git_range=None):
         scope = f"提交范围 {git_range}"
     try:
         out = subprocess.run(
-            ["git", "-C", str(root), "log", "--format=%an|%ae", *revision_args],
+            ["git", "-C", str(root), "log", "--format=%an|%ae|%cn|%ce", *revision_args],
             capture_output=True,
             text=True,
             check=True,
@@ -107,10 +107,12 @@ def check_git_history(root, git_range=None):
         return
     idents = sorted(set(line for line in out.splitlines() if line.strip()))
     for ident in idents:
-        name, _, email = ident.partition("|")
-        if not email.endswith(ALLOWED_EMAIL_SUFFIX):
-            errors.append(f"{scope}有非 noreply 邮箱: {name} <{email}> "
-                          "(私人邮箱进公开历史要 force push 重写才能洗掉, 推送前必须清)")
+        fields = ident.split("|")
+        # author 与 committer 身份同等对待, 两者都会进入公开 git 历史
+        for name, email in zip(fields[0::2], fields[1::2]):
+            if not email.endswith(ALLOWED_EMAIL_SUFFIX):
+                errors.append(f"{scope}有非 noreply 邮箱: {name} <{email}> "
+                              "(私人邮箱进公开历史要 force push 重写才能洗掉, 推送前必须清)")
     if re.search(r"co-authored-by", bodies, re.I):
         errors.append(f"{scope}的 commit 信息里有 Co-Authored-By 标记, 公开仓库不允许")
     if git_range:
