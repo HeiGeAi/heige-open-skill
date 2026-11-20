@@ -24,6 +24,7 @@ import urllib.request
 from pathlib import Path
 
 ALLOWED_EMAIL_SUFFIX = "@users.noreply.github.com"
+ALLOWED_SERVICE_EMAILS = {"noreply@github.com"}
 ALLOWED_FRONTMATTER_KEYS = {"name", "description", "allowed-tools",
                             "compatibility", "license", "metadata"}
 # 无需人工核查的域名: 基础设施、保留 TLD、官方站点
@@ -119,7 +120,7 @@ def check_git_history(root, git_range=None):
         fields = ident.split("|")
         # author 与 committer 身份同等对待, 两者都会进入公开 git 历史
         for name, email in zip(fields[0::2], fields[1::2]):
-            if not email.endswith(ALLOWED_EMAIL_SUFFIX):
+            if not email.endswith(ALLOWED_EMAIL_SUFFIX) and email not in ALLOWED_SERVICE_EMAILS:
                 errors.append(f"{scope}有非 noreply 邮箱: {name} <{email}> "
                               "(私人邮箱进公开历史要 force push 重写才能洗掉, 推送前必须清)")
     if re.search(r"co-authored-by", bodies, re.I):

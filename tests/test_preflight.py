@@ -110,6 +110,21 @@ class PreflightTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_public_github_service_noreply_passes_history_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._create_repo(root, "noreply@github.com")
+            result = self._run_preflight(root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_github_domain_is_not_a_private_email_allowlist(self):
+        for email in ("private@github.com", "noreply@github.com.example.test"):
+            with self.subTest(email=email), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                self._create_repo(root, email)
+                result = self._run_preflight(root)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
     def test_git_range_still_rejects_new_private_email(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
