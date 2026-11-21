@@ -88,13 +88,13 @@ def check_git_history(root, git_range=None):
         scope = f"提交范围 {git_range}"
     try:
         out = subprocess.run(
-            ["git", "-C", str(root), "log", "--format=%an|%ae|%cn|%ce", *revision_args],
+            ["git", "-C", str(root), "log", "--format=%an%x00%ae%x00%cn%x00%ce", *revision_args, "--"],
             capture_output=True,
             text=True,
             check=True,
         ).stdout
         bodies = subprocess.run(
-            ["git", "-C", str(root), "log", "--format=%B", *revision_args],
+            ["git", "-C", str(root), "log", "--format=%B", *revision_args, "--"],
             capture_output=True,
             text=True,
             check=True,
@@ -117,10 +117,14 @@ def check_git_history(root, git_range=None):
         return
     idents = sorted(set(line for line in out.splitlines() if line.strip()))
     for ident in idents:
-        fields = ident.split("|")
+        fields = ident.split("\x00")
+        if len(fields) != 4:
+            errors.append(f"{scope}身份字段解析异常: {ident!r}")
+            continue
         # author 与 committer 身份同等对待, 两者都会进入公开 git 历史
-        for name, email in zip(fields[0::2], fields[1::2]):
-            if not email.endswith(ALLOWED_EMAIL_SUFFIX) and email not in ALLOWED_SERVICE_EMAILS:
+        for name, email in ((fields[0], fields[1]), (fields[2], fields[3])):
+            email_lc = email.lower()
+            if not email_lc.endswith(ALLOWED_EMAIL_SUFFIX) and email_lc not in ALLOWED_SERVICE_EMAILS:
                 errors.append(f"{scope}有非 noreply 邮箱: {name} <{email}> "
                               "(私人邮箱进公开历史要 force push 重写才能洗掉, 推送前必须清)")
     if re.search(r"co-authored-by", bodies, re.I):
@@ -221,12 +225,20 @@ def check_entities(root):
         infos.append(f"需人工核查的 GitHub 句柄(gh api users/<句柄> 查存在): {listing}")
 
 
+def extract_readme_urls(text):
+    raw = re.findall(
+        r"https?://[^\s)\"'<>\]`\u2000-\u206f\u3000-\u303f\uff00-\uffef\u4e00-\u9fff]+",
+        text,
+    )
+    cleaned = {u.rstrip(".,;:") for u in raw}
+    return sorted(u for u in cleaned if "img.shields.io" not in u)
+
+
 def check_links(root):
     readme = root / "README.md"
     if not readme.exists():
         return
-    urls = sorted(set(re.findall(r"https?://[^\s)\"'<>\]]+", readme.read_text(encoding="utf-8", errors="replace"))))
-    urls = [u.rstrip(".,;:") for u in urls if "img.shields.io" not in u]
+    urls = extract_readme_urls(readme.read_text(encoding="utf-8", errors="replace"))
     for url in urls:
         try:
             req = urllib.request.Request(url, method="GET",
