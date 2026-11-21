@@ -240,6 +240,70 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("legacy@example.com", result.stdout)
 
+    def test_pipe_in_author_name_cannot_bypass_or_falsely_fail_email_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._create_repo(root, "12345+test@users.noreply.github.com")
+            (root / "README.md").write_text("# Test\n\nPipe legit.\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            subprocess.run(
+                [
+                    "git", "-C", str(root),
+                    "-c", "user.name=HeiGeAi | Studio",
+                    "-c", "user.email=12345+test@users.noreply.github.com",
+                    "-c", "commit.gpgsign=false",
+                    "commit", "-m", "pipe in display name",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            legit = self._run_preflight(root)
+        self.assertEqual(legit.returncode, 0, legit.stdout + legit.stderr)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._create_repo(root, "12345+test@users.noreply.github.com")
+            (root / "README.md").write_text("# Test\n\nPipe bypass.\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            env = dict(
+                os.environ,
+                GIT_COMMITTER_NAME="ok@users.noreply.github.com",
+                GIT_COMMITTER_EMAIL="leaked-committer@example.com",
+            )
+            subprocess.run(
+                [
+                    "git", "-C", str(root),
+                    "-c", "user.name=Alice|ok@users.noreply.github.com",
+                    "-c", "user.email=leaked-author@example.com",
+                    "-c", "commit.gpgsign=false",
+                    "commit", "-m", "crafted pipe name",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                env=env,
+            )
+            bypass = self._run_preflight(root)
+        self.assertEqual(bypass.returncode, 1, bypass.stdout + bypass.stderr)
+        self.assertIn("leaked-author@example.com", bypass.stdout)
+        self.assertIn("leaked-committer@example.com", bypass.stdout)
+
+    def test_extract_readme_urls_trims_backticks_cjk_punctuation_and_deduplicates(self):
+        md = (
+            "Inline `https://example.com/a` and bare https://example.com/b。\n"
+            "Duplicate https://example.com/a. and em-dash https://example.com/c——说明\n"
+            "Badge https://img.shields.io/badge/license-MIT-green.svg\n"
+        )
+        self.assertEqual(
+            preflight.extract_readme_urls(md),
+            [
+                "https://example.com/a",
+                "https://example.com/b",
+                "https://example.com/c",
+            ],
+        )
+
     def test_ci_uses_auditable_ranges_and_keeps_full_history_dispatch(self):
         workflow = (MODULE_PATH.parents[1] / ".github" / "workflows" / "ci.yml").read_text(
             encoding="utf-8",
